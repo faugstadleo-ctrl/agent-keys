@@ -16,9 +16,10 @@
     p, .muted { color: #444; }
     .card { background: #fff; border: 1px solid #e6e6e6; padding: 20px; margin: 12px 0; }
     label { display: block; font-weight: 600; margin: 10px 0 6px; }
-    input[type=text], input[type=password], select { width: 100%; padding: 10px; border: 1px solid #ddd; font: inherit; }
+    input[type=text], select { width: 100%; padding: 10px; border: 1px solid #ddd; font: inherit; }
     .checks label { font-weight: 500; display: inline-flex; gap: 6px; margin-right: 16px; }
-    button { background: #111; color: #fff; border: none; padding: 12px 18px; font-weight: 700; cursor: pointer; margin-top: 12px; }
+    button { background: #111; color: #fff; border: none; padding: 10px 14px; font-weight: 700; cursor: pointer; margin-top: 12px; }
+    button.kill { background: #fff; color: #c0392b; border: 1px solid #c0392b; }
     table { width: 100%; border-collapse: collapse; background: #fff; }
     th, td { text-align: left; padding: 12px; border-bottom: 1px solid #eee; vertical-align: top; }
     th { font-size: 0.8rem; letter-spacing: 0.06em; text-transform: uppercase; color: #666; }
@@ -26,7 +27,7 @@
     .sent { color: #9a6700; font-weight: 700; }
     .refused { color: #c0392b; font-weight: 700; }
     .error { color: #c0392b; }
-    pre { background: #111; color: #eee; padding: 14px; overflow: auto; font-size: 0.85rem; }
+    pre { background: #111; color: #eee; padding: 14px; overflow: auto; font-size: 0.85rem; white-space: pre-wrap; }
     code { background: #f1f1f1; padding: 2px 6px; }
     footer { background: #111; color: #bbb; margin-top: 40px; }
     .foot { max-width: 1100px; margin: 0 auto; padding: 20px 24px; }
@@ -36,7 +37,7 @@
   <header><nav><a class="brand" href="/">Agent keys</a></nav></header>
   <main>
     <h1>Agents, keys, and a log</h1>
-    <p>Create an agent. Tick what it may do. It gets its own key. The agent calls the gate with that key. The gate allows, sends, or refuses, and writes it down.</p>
+    <p>Create an agent. Tick what it may do. It gets its own key. Run it, and it calls the gate. Kill the key and it stops.</p>
 
     <h2>New agent</h2>
     <div class="card">
@@ -54,25 +55,16 @@
       <p id="created"></p>
     </div>
 
-    <h2>How an agent calls this</h2>
-    <div class="card">
-      <p>The agent does not get your GitHub token. It gets the key above, and it calls this:</p>
-      <pre id="sample">Create an agent to see the call.</pre>
-    </div>
-
     <h2>Agents</h2>
     <div id="agents"><p class="muted">None yet.</p></div>
 
-    <h2>Try a call</h2>
+    <h2>Run the agent</h2>
     <div class="card">
+      <p>This agent only has its key. It will try to read you, read your repos, and delete you. The gate decides each one.</p>
       <label for="key">Agent key</label>
       <input id="key" type="text" placeholder="ak_...">
-      <label for="method">Method</label>
-      <select id="method"><option>GET</option><option>POST</option><option>DELETE</option></select>
-      <label for="path">GitHub path</label>
-      <input id="path" type="text" placeholder="/user">
-      <button onclick="tryCall()">Send through the gate</button>
-      <p id="callstatus"></p>
+      <button onclick="runAgent()">Run agent</button>
+      <div id="reply"></div>
     </div>
 
     <h2>Log</h2>
@@ -80,13 +72,6 @@
   </main>
   <footer><div class="foot">Agent keys · 2026</div></footer>
   <script>
-    function sample(key) {
-      const k = key || 'ak_YOUR_KEY';
-      document.getElementById('sample').textContent =
-        'POST /api/gate\n' +
-        'Authorization: Bearer ' + k + '\n\n' +
-        '{ "method": "GET", "path": "/user" }';
-    }
     async function refresh() {
       const res = await fetch('/api/agents');
       const data = await res.json();
@@ -94,8 +79,10 @@
       const logs = document.getElementById('logs');
       if (!data.agents.length) agents.innerHTML = '<p class="muted">None yet.</p>';
       else {
-        let html = '<table><tr><th>Name</th><th>Owner</th><th>Allowed</th><th>Key</th></tr>';
-        for (const a of data.agents) html += '<tr><td>' + a.name + '</td><td>' + a.owner + '</td><td>' + (a.allowed.join(', ') || 'nothing') + '</td><td><code>' + a.key + '</code></td></tr>';
+        let html = '<table><tr><th>Name</th><th>Owner</th><th>Allowed</th><th>Status</th><th></th></tr>';
+        for (const a of data.agents) {
+          html += '<tr><td>' + a.name + '</td><td>' + a.owner + '</td><td>' + (a.allowed.join(', ') || 'nothing') + '</td><td>' + (a.killed ? 'killed' : 'live') + '</td><td>' + (a.killed ? '' : '<button class="kill" onclick="killAgent(\'' + a.id + '\')">Kill</button>') + '</td></tr>';
+        }
         agents.innerHTML = html + '</table>';
       }
       if (!data.logs.length) logs.innerHTML = '<p class="muted">No calls yet.</p>';
@@ -115,20 +102,27 @@
       if (!res.ok) { created.innerHTML = '<span class="error">' + data.error + '</span>'; return; }
       created.innerHTML = 'Key, copy it now: <code>' + data.agent.key + '</code>';
       document.getElementById('key').value = data.agent.key;
-      sample(data.agent.key);
       refresh();
     }
-    async function tryCall() {
+    async function killAgent(id) {
+      await fetch('/api/agents/' + id + '/kill', { method: 'POST' });
+      refresh();
+    }
+    async function runAgent() {
       const key = document.getElementById('key').value.trim();
-      const method = document.getElementById('method').value;
-      const path = document.getElementById('path').value.trim();
-      const status = document.getElementById('callstatus');
-      const res = await fetch('/api/gate', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + key }, body: JSON.stringify({ method, path }) });
+      const reply = document.getElementById('reply');
+      reply.innerHTML = '<p>Running...</p>';
+      const res = await fetch('/api/run-agent', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key }) });
       const data = await res.json();
-      status.innerHTML = '<span class="' + (data.result || 'refused') + '">' + (data.result || 'refused') + '</span> ' + (data.detail || data.error || '');
+      if (!res.ok) { reply.innerHTML = '<p class="error">' + (data.error || 'Failed') + '</p>'; refresh(); return; }
+      let html = '';
+      for (const step of data.results) {
+        html += '<p><span class="' + (step.result || 'refused') + '">' + (step.result || 'refused') + '</span> ' + step.method + ' ' + step.path + '<br>' + (step.detail || '') + '</p>';
+        if (step.body) html += '<pre>' + step.body.slice(0, 1500) + '</pre>';
+      }
+      reply.innerHTML = html;
       refresh();
     }
-    sample();
     refresh();
   </script>
 </body>
