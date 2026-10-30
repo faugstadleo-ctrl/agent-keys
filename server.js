@@ -10,6 +10,8 @@ const LOGS_FILE = path.join(DATA, 'logs.json');
 const ADMIN_USER = process.env.ADMIN_USER || 'admin';
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'changeme';
 const SECRET = process.env.SESSION_SECRET || 'agent-keys-secret';
+const GH_TOKEN = process.env.GITHUB_TOKEN;
+const REPO = 'faugstadleo-ctrl/agent-keys';
 
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
@@ -26,7 +28,72 @@ let logs = readJson(LOGS_FILE);
 
 function id() { return crypto.randomBytes(6).toString('hex'); }
 function key() { return 'ak_' + crypto.randomBytes(18).toString('hex'); }
-function save() { writeJson(AGENTS_FILE, agents); writeJson(LOGS_FILE, logs); }
+
+async function gh(method, url, body) {
+  const res = await fetch('https://api.github.com' + url, {
+    method,
+    headers: {
+      Authorization: 'Bearer ' + GH_TOKEN,
+      Accept: 'application/vnd.github+json',
+      'User-Agent': 'agent-keys',
+      'X-GitHub-Api-Version': '2022-11-28',
+      'Content-Type': 'application/json'
+    },
+    body: body ? JSON.stringify(body) : undefined
+  });
+  const text = await res.text();
+  let data = null;
+  try { data = text ? JSON.parse(text) : null; } catch (e) { data = { raw: text }; }
+  return { ok: res.ok, status: res.status, data };
+}
+
+async function ensureDataBranch() {
+  const existing = await gh('GET', '/repos/' + REPO + '/branches/data');
+  if (existing.ok) return true;
+  const main = await gh('GET', '/repos/' + REPO + '/git/ref/heads/main');
+  if (!main.ok) return false;
+  const created = await gh('POST', '/repos/' + REPO + '/git/refs', { ref: 'refs/heads/data', sha: main.data.object.sha });
+  return created.ok || created.status === 422;
+}
+
+async function loadRemote(file) {
+  const res = await gh('GET', '/repos/' + REPO + '/contents/' + file + '?ref=data');
+  if (!res.ok || !res.data || !res.data.content) return null;
+  try { return JSON.parse(Buffer.from(res.data.content, 'base64').toString('utf8')); } catch (e) { return null; }
+}
+
+async function saveRemote(file, data) {
+  const current = await gh('GET', '/repos/' + REPO + '/contents/' + file + '?ref=data');
+  const body = {
+    message: 'Update ' + file,
+    content: Buffer.from(JSON.stringify(data, null, 2)).toString('base64'),
+    branch: 'data'
+  };
+  if (current.ok && current.data && current.data.sha) body.sha = current.data.sha;
+  await gh('PUT', '/repos/' + REPO + '/contents/' + file, body);
+}
+
+async function save() {
+  writeJson(AGENTS_FILE, agents);
+  writeJson(LOGS_FILE, logs);
+  if (!GH_TOKEN) return;
+  try {
+    await ensureDataBranch();
+    await saveRemote('agents.json', agents);
+    await saveRemote('logs.json', logs.slice(-200));
+  } catch (e) { console.error('remote save failed', e.message); }
+}
+
+async function load() {
+  if (!GH_TOKEN) return;
+  try {
+    await ensureDataBranch();
+    const a = await loadRemote('agents.json');
+    const l = await loadRemote('logs.json');
+    if (Array.isArray(a)) agents = a;
+    if (Array.isArray(l)) logs = l;
+  } catch (e) { console.error('remote load failed', e.message); }
+}
 
 function sign(value) {
   return value + '.' + crypto.createHmac('sha256', SECRET).update(value).digest('hex');
@@ -45,7 +112,6 @@ function requireLogin(req, res, next) {
   if (validSession(req.headers.cookie)) return next();
   res.status(401).json({ error: 'Login required.' });
 }
-
 function actionOf(method) {
   const m = (method || 'GET').toUpperCase();
   if (m === 'GET' || m === 'HEAD') return 'read';
@@ -61,21 +127,15 @@ function agentKeyFrom(req) {
 app.post('/api/login', (req, res) => {
   const user = (req.body.user || '').trim();
   const password = req.body.password || '';
-  if (user !== ADMIN_USER || password !== ADMIN_PASSWORD) {
-    return res.status(401).json({ error: 'Wrong user or password.' });
-  }
+  if (user !== ADMIN_USER || password !== ADMIN_PASSWORD) return res.status(401).json({ error: 'Wrong user or password.' });
   res.setHeader('Set-Cookie', 'session=' + encodeURIComponent(sign(user)) + '; HttpOnly; Path=/; SameSite=Lax');
   res.json({ ok: true });
 });
-
 app.post('/api/logout', (req, res) => {
   res.setHeader('Set-Cookie', 'session=; HttpOnly; Path=/; Max-Age=0');
   res.json({ ok: true });
 });
-
-app.get('/api/me', (req, res) => {
-  res.json({ ok: validSession(req.headers.cookie) });
-});
+app.get('/api/me', (req, res) => res.json({ ok: validSession(req.headers.cookie) }));
 
 app.get('/api/agents', requireLogin, (req, res) => {
   res.json({
@@ -129,8 +189,7 @@ async function gate(agentKey, method, ghPath, body) {
     save();
     return { status: 400, payload: { error: 'Path must start with /', result: 'refused' } };
   }
-  const token = process.env.GITHUB_TOKEN;
-  if (!token) {
+  if (!GH_TOKEN) {
     logs.push({ at, agent: agent.name, action: method + ' ' + ghPath, result: 'allowed', detail: 'Gate allowed it. No GitHub token on the server, so nothing was sent.' });
     save();
     return { status: 200, payload: { result: 'allowed', forwarded: false, detail: 'Gate allowed it. No GitHub token on the server, so nothing was sent.' } };
@@ -138,7 +197,7 @@ async function gate(agentKey, method, ghPath, body) {
   const upstream = await fetch('https://api.github.com' + ghPath, {
     method,
     headers: {
-      Authorization: 'Bearer ' + token,
+      Authorization: 'Bearer ' + GH_TOKEN,
       Accept: 'application/vnd.github+json',
       'User-Agent': 'agent-keys',
       'X-GitHub-Api-Version': '2022-11-28',
@@ -181,4 +240,4 @@ app.post('/api/run-agent', requireLogin, async (req, res) => {
   res.json({ agent: agent.name, results });
 });
 
-app.listen(PORT, () => console.log('agent-keys on ' + PORT));
+load().then(() => app.listen(PORT, () => console.log('agent-keys on ' + PORT)));
