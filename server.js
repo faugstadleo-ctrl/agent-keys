@@ -32,6 +32,12 @@ function actionOf(method) {
   return 'write';
 }
 
+function agentKeyFrom(req) {
+  const header = req.get('authorization') || '';
+  if (header.toLowerCase().startsWith('bearer ')) return header.slice(7).trim();
+  return (req.body && req.body.key || '').trim();
+}
+
 app.get('/api/agents', (req, res) => {
   res.json({
     agents: agents.map(a => ({ id: a.id, name: a.name, owner: a.owner, allowed: a.allowed, created: a.created, key: a.key.slice(0, 10) + '...' })),
@@ -52,7 +58,7 @@ app.post('/api/agents', (req, res) => {
 });
 
 app.post('/api/gate', async (req, res) => {
-  const agentKey = (req.body.key || '').trim();
+  const agentKey = agentKeyFrom(req);
   const method = (req.body.method || 'GET').toUpperCase();
   const ghPath = (req.body.path || '').trim();
   const agent = agents.find(a => a.key === agentKey);
