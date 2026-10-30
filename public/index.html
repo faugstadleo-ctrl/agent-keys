@@ -8,21 +8,24 @@
     * { box-sizing: border-box; }
     body { margin: 0; font-family: system-ui, sans-serif; background: #f6f7f9; color: #111; }
     header { background: #111; color: #fff; }
-    nav { max-width: 1100px; margin: 0 auto; padding: 16px 24px; display: flex; justify-content: space-between; align-items: center; }
+    nav { max-width: 1100px; margin: 0 auto; padding: 16px 24px; }
     .brand { color: #fff; font-weight: 700; text-decoration: none; }
     main { max-width: 1100px; margin: 0 auto; padding: 32px 24px; }
     h1 { font-size: 2rem; letter-spacing: -0.02em; margin: 0 0 8px; }
-    p { color: #444; }
-    .card { background: #fff; border: 1px solid #e6e6e6; padding: 20px; margin: 16px 0; }
-    label { display: block; font-weight: 600; margin-bottom: 6px; }
-    input { width: 100%; padding: 10px; border: 1px solid #ddd; font: inherit; }
+    h2 { font-size: 1.2rem; margin: 28px 0 12px; }
+    p, .muted { color: #444; }
+    .card { background: #fff; border: 1px solid #e6e6e6; padding: 20px; margin: 12px 0; }
+    label { display: block; font-weight: 600; margin: 10px 0 6px; }
+    input[type=text], input[type=password], select { width: 100%; padding: 10px; border: 1px solid #ddd; font: inherit; }
+    .checks label { font-weight: 500; display: inline-flex; gap: 6px; margin-right: 16px; }
     button { background: #111; color: #fff; border: none; padding: 12px 18px; font-weight: 700; cursor: pointer; margin-top: 12px; }
     table { width: 100%; border-collapse: collapse; background: #fff; }
     th, td { text-align: left; padding: 12px; border-bottom: 1px solid #eee; vertical-align: top; }
     th { font-size: 0.8rem; letter-spacing: 0.06em; text-transform: uppercase; color: #666; }
-    .wide { color: #c0392b; font-weight: 700; }
-    .ok { color: #1e7e34; font-weight: 700; }
+    .allowed { color: #1e7e34; font-weight: 700; }
+    .refused { color: #c0392b; font-weight: 700; }
     .error { color: #c0392b; }
+    code { background: #f1f1f1; padding: 2px 6px; }
     footer { background: #111; color: #bbb; margin-top: 40px; }
     .foot { max-width: 1100px; margin: 0 auto; padding: 20px 24px; }
   </style>
@@ -30,42 +33,86 @@
 <body>
   <header><nav><a class="brand" href="/">Agent keys</a></nav></header>
   <main>
-    <h1>Which keys can an agent use</h1>
-    <p>Paste a GitHub token. This lists the fine-grained tokens and SSH keys on that account, and marks the ones that can write or administer.</p>
+    <h1>Agents, keys, and a log</h1>
+    <p>Create an agent. Tick what it may do. It gets its own key. Every call it makes is allowed or refused, and written down.</p>
+
+    <h2>New agent</h2>
     <div class="card">
-      <label for="token">GitHub token</label>
-      <input id="token" type="password" placeholder="github_pat_... or ghp_...">
-      <button onclick="load()">List keys</button>
-      <p id="status"></p>
+      <label for="name">Agent name</label>
+      <input id="name" type="text" placeholder="deploy-bot">
+      <label for="owner">Owner</label>
+      <input id="owner" type="text" placeholder="The person responsible">
+      <label>Allowed</label>
+      <div class="checks">
+        <label><input type="checkbox" value="read" checked> Read</label>
+        <label><input type="checkbox" value="write"> Write</label>
+        <label><input type="checkbox" value="delete"> Delete</label>
+      </div>
+      <button onclick="createAgent()">Create agent</button>
+      <p id="created"></p>
     </div>
-    <div id="out"></div>
+
+    <h2>Agents</h2>
+    <div id="agents"><p class="muted">None yet.</p></div>
+
+    <h2>Try a call</h2>
+    <div class="card">
+      <label for="key">Agent key</label>
+      <input id="key" type="text" placeholder="ak_...">
+      <label for="method">Method</label>
+      <select id="method"><option>GET</option><option>POST</option><option>DELETE</option></select>
+      <label for="path">GitHub path</label>
+      <input id="path" type="text" placeholder="/user">
+      <button onclick="tryCall()">Send through the gate</button>
+      <p id="callstatus"></p>
+    </div>
+
+    <h2>Log</h2>
+    <div id="logs"><p class="muted">No calls yet.</p></div>
   </main>
   <footer><div class="foot">Agent keys · 2026</div></footer>
   <script>
-    async function load() {
-      const token = document.getElementById('token').value.trim();
-      const status = document.getElementById('status');
-      const out = document.getElementById('out');
-      if (!token) { status.innerHTML = '<span class="error">Token is required.</span>'; return; }
-      status.textContent = 'Reading keys...';
-      out.innerHTML = '';
-      try {
-        const res = await fetch('/api/keys', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token }) });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'Failed');
-        status.textContent = data.user + ' · ' + data.count + ' keys';
-        if (data.pat_error) status.innerHTML += '<br><span class="error">Token list: ' + data.pat_error + '</span>';
-        if (!data.keys.length) { out.innerHTML = '<p>No fine-grained tokens or SSH keys found.</p>'; return; }
-        let html = '<table><tr><th>Kind</th><th>Name</th><th>Owner</th><th>Access</th><th>Expires</th><th>Verdict</th></tr>';
-        for (const k of data.keys) {
-          html += '<tr><td>' + k.kind + '</td><td>' + (k.name || '') + '</td><td>' + (k.owner || '') + '</td><td>' + (k.permissions || []).join('<br>') + '</td><td>' + (k.expires || '—') + '</td><td class="' + (k.wide ? 'wide' : 'ok') + '">' + (k.wide ? 'Too wide' : 'Limited') + '</td></tr>';
-        }
-        html += '</table>';
-        out.innerHTML = html;
-      } catch (err) {
-        status.innerHTML = '<span class="error">' + err.message + '</span>';
+    async function refresh() {
+      const res = await fetch('/api/agents');
+      const data = await res.json();
+      const agents = document.getElementById('agents');
+      const logs = document.getElementById('logs');
+      if (!data.agents.length) agents.innerHTML = '<p class="muted">None yet.</p>';
+      else {
+        let html = '<table><tr><th>Name</th><th>Owner</th><th>Allowed</th><th>Key</th></tr>';
+        for (const a of data.agents) html += '<tr><td>' + a.name + '</td><td>' + a.owner + '</td><td>' + (a.allowed.join(', ') || 'nothing') + '</td><td><code>' + a.key + '</code></td></tr>';
+        agents.innerHTML = html + '</table>';
+      }
+      if (!data.logs.length) logs.innerHTML = '<p class="muted">No calls yet.</p>';
+      else {
+        let html = '<table><tr><th>When</th><th>Agent</th><th>Action</th><th>Result</th><th>Detail</th></tr>';
+        for (const l of data.logs) html += '<tr><td>' + new Date(l.at).toLocaleString() + '</td><td>' + l.agent + '</td><td>' + l.action + '</td><td class="' + l.result + '">' + l.result + '</td><td>' + l.detail + '</td></tr>';
+        logs.innerHTML = html + '</table>';
       }
     }
+    async function createAgent() {
+      const name = document.getElementById('name').value.trim();
+      const owner = document.getElementById('owner').value.trim();
+      const allowed = [...document.querySelectorAll('.checks input:checked')].map(x => x.value);
+      const created = document.getElementById('created');
+      const res = await fetch('/api/agents', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, owner, allowed }) });
+      const data = await res.json();
+      if (!res.ok) { created.innerHTML = '<span class="error">' + data.error + '</span>'; return; }
+      created.innerHTML = 'Key, copy it now: <code>' + data.agent.key + '</code>';
+      document.getElementById('key').value = data.agent.key;
+      refresh();
+    }
+    async function tryCall() {
+      const key = document.getElementById('key').value.trim();
+      const method = document.getElementById('method').value;
+      const path = document.getElementById('path').value.trim();
+      const status = document.getElementById('callstatus');
+      const res = await fetch('/api/gate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key, method, path }) });
+      const data = await res.json();
+      status.innerHTML = '<span class="' + (data.result === 'allowed' ? 'allowed' : 'refused') + '">' + (data.result || 'refused') + '</span> ' + (data.detail || data.error || '');
+      refresh();
+    }
+    refresh();
   </script>
 </body>
 </html>
