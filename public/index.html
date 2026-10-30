@@ -23,6 +23,7 @@
     th, td { text-align: left; padding: 12px; border-bottom: 1px solid #eee; vertical-align: top; }
     th { font-size: 0.8rem; letter-spacing: 0.06em; text-transform: uppercase; color: #666; }
     .allowed { color: #1e7e34; font-weight: 700; }
+    .sent { color: #9a6700; font-weight: 700; }
     .refused { color: #c0392b; font-weight: 700; }
     .error { color: #c0392b; }
     code { background: #f1f1f1; padding: 2px 6px; }
@@ -34,7 +35,7 @@
   <header><nav><a class="brand" href="/">Agent keys</a></nav></header>
   <main>
     <h1>Agents, keys, and a log</h1>
-    <p>Create an agent. Tick what it may do. It gets its own key. Every call it makes is allowed or refused, and written down.</p>
+    <p>Create an agent. Tick what it may do. It gets its own key. Every call is allowed, sent, or refused, and written down.</p>
 
     <h2>New agent</h2>
     <div class="card">
@@ -109,7 +110,7 @@
       const status = document.getElementById('callstatus');
       const res = await fetch('/api/gate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key, method, path }) });
       const data = await res.json();
-      status.innerHTML = '<span class="' + (data.result === 'allowed' ? 'allowed' : 'refused') + '">' + (data.result || 'refused') + '</span> ' + (data.detail || data.error || '');
+      status.innerHTML = '<span class="' + (data.result || 'refused') + '">' + (data.result || 'refused') + '</span> ' + (data.detail || data.error || '');
       refresh();
     }
     refresh();
