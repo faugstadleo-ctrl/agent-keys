@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Login</title>
+  <style>
+    body { margin: 0; font-family: system-ui, sans-serif; background: #f6f7f9; color: #111; }
+    main { max-width: 420px; margin: 80px auto; padding: 24px; }
+    .card { background: #fff; border: 1px solid #e6e6e6; padding: 24px; }
+    h1 { font-size: 1.6rem; margin: 0 0 16px; }
+    label { display: block; font-weight: 600; margin: 12px 0 6px; }
+    input { width: 100%; padding: 10px; border: 1px solid #ddd; font: inherit; box-sizing: border-box; }
+    button { background: #111; color: #fff; border: none; padding: 12px 18px; font-weight: 700; cursor: pointer; margin-top: 16px; }
+    .error { color: #c0392b; }
+  </style>
+</head>
+<body>
+  <main>
+    <div class="card">
+      <h1>Login</h1>
+      <label for="user">User</label>
+      <input id="user" type="text" value="admin">
+      <label for="password">Password</label>
+      <input id="password" type="password">
+      <button onclick="login()">Login</button>
+      <p id="status"></p>
+    </div>
+  </main>
+  <script>
+    async function login() {
+      const user = document.getElementById('user').value.trim();
+      const password = document.getElementById('password').value;
+      const status = document.getElementById('status');
+      const res = await fetch('/api/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ user, password }) });
+      const data = await res.json();
+      if (!res.ok) { status.innerHTML = '<span class="error">' + (data.error || 'Failed') + '</span>'; return; }
+      location.href = '/';
+    }
+    document.getElementById('password').addEventListener('keydown', e => { if (e.key === 'Enter') login(); });
+  </script>
+</body>
+</html>
