@@ -75,9 +75,9 @@ app.post('/api/gate', async (req, res) => {
   }
   const token = process.env.GITHUB_TOKEN;
   if (!token) {
-    logs.push({ at, agent: agent.name, action: method + ' ' + ghPath, result: 'allowed', detail: 'Allowed, but no GitHub token is set on the server, so nothing was sent.' });
+    logs.push({ at, agent: agent.name, action: method + ' ' + ghPath, result: 'allowed', detail: 'Gate allowed it. No GitHub token on the server, so nothing was sent.' });
     save();
-    return res.json({ result: 'allowed', forwarded: false, detail: 'Allowed. No GitHub token on the server, so the call was not sent.' });
+    return res.json({ result: 'allowed', forwarded: false, detail: 'Gate allowed it. No GitHub token on the server, so nothing was sent.' });
   }
   try {
     const upstream = await fetch('https://api.github.com' + ghPath, {
@@ -92,13 +92,15 @@ app.post('/api/gate', async (req, res) => {
       body: method === 'GET' || method === 'HEAD' ? undefined : JSON.stringify(req.body.body || {})
     });
     const text = await upstream.text();
-    logs.push({ at, agent: agent.name, action: method + ' ' + ghPath, result: upstream.ok ? 'allowed' : 'refused', detail: 'GitHub ' + upstream.status });
+    const result = upstream.ok ? 'allowed' : 'sent';
+    const detail = upstream.ok ? ('Sent to GitHub. GitHub ' + upstream.status) : ('Gate allowed it. GitHub rejected it (' + upstream.status + ').');
+    logs.push({ at, agent: agent.name, action: method + ' ' + ghPath, result, detail });
     save();
-    res.status(upstream.status).json({ result: upstream.ok ? 'allowed' : 'refused', forwarded: true, status: upstream.status, body: text.slice(0, 2000) });
+    res.status(200).json({ result, forwarded: true, status: upstream.status, detail, body: text.slice(0, 500) });
   } catch (err) {
-    logs.push({ at, agent: agent.name, action: method + ' ' + ghPath, result: 'refused', detail: err.message });
+    logs.push({ at, agent: agent.name, action: method + ' ' + ghPath, result: 'sent', detail: 'Gate allowed it. Could not reach GitHub: ' + err.message });
     save();
-    res.status(502).json({ error: err.message, result: 'refused' });
+    res.status(200).json({ result: 'sent', error: err.message, detail: 'Gate allowed it. Could not reach GitHub.' });
   }
 });
 
