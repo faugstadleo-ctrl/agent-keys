@@ -8,8 +8,9 @@
     * { box-sizing: border-box; }
     body { margin: 0; font-family: system-ui, sans-serif; background: #f6f7f9; color: #111; }
     header { background: #111; color: #fff; }
-    nav { max-width: 1100px; margin: 0 auto; padding: 16px 24px; }
+    nav { max-width: 1100px; margin: 0 auto; padding: 16px 24px; display: flex; justify-content: space-between; align-items: center; }
     .brand { color: #fff; font-weight: 700; text-decoration: none; }
+    .out { color: #fff; background: transparent; border: 1px solid #444; margin: 0; }
     main { max-width: 1100px; margin: 0 auto; padding: 32px 24px; }
     h1 { font-size: 2rem; letter-spacing: -0.02em; margin: 0 0 8px; }
     h2 { font-size: 1.2rem; margin: 28px 0 12px; }
@@ -34,7 +35,7 @@
   </style>
 </head>
 <body>
-  <header><nav><a class="brand" href="/">Agent keys</a></nav></header>
+  <header><nav><a class="brand" href="/">Agent keys</a><button class="out" onclick="logout()">Logout</button></nav></header>
   <main>
     <h1>Agents, keys, and a log</h1>
     <p>Create an agent. Tick what it may do. It gets its own key. Run it, and it calls the gate. Kill the key and it stops.</p>
@@ -73,7 +74,8 @@
   <footer><div class="foot">Agent keys · 2026</div></footer>
   <script>
     async function refresh() {
-      const res = await fetch('/api/agents');
+      const res = await fetch('/api/agents', { credentials: 'same-origin' });
+      if (res.status === 401) { location.href = '/login.html'; return; }
       const data = await res.json();
       const agents = document.getElementById('agents');
       const logs = document.getElementById('logs');
@@ -97,7 +99,8 @@
       const owner = document.getElementById('owner').value.trim();
       const allowed = [...document.querySelectorAll('.checks input:checked')].map(x => x.value);
       const created = document.getElementById('created');
-      const res = await fetch('/api/agents', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, owner, allowed }) });
+      const res = await fetch('/api/agents', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, owner, allowed }) });
+      if (res.status === 401) { location.href = '/login.html'; return; }
       const data = await res.json();
       if (!res.ok) { created.innerHTML = '<span class="error">' + data.error + '</span>'; return; }
       created.innerHTML = 'Key, copy it now: <code>' + data.agent.key + '</code>';
@@ -105,14 +108,15 @@
       refresh();
     }
     async function killAgent(id) {
-      await fetch('/api/agents/' + id + '/kill', { method: 'POST' });
+      await fetch('/api/agents/' + id + '/kill', { method: 'POST', credentials: 'same-origin' });
       refresh();
     }
     async function runAgent() {
       const key = document.getElementById('key').value.trim();
       const reply = document.getElementById('reply');
       reply.innerHTML = '<p>Running...</p>';
-      const res = await fetch('/api/run-agent', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key }) });
+      const res = await fetch('/api/run-agent', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key }) });
+      if (res.status === 401) { location.href = '/login.html'; return; }
       const data = await res.json();
       if (!res.ok) { reply.innerHTML = '<p class="error">' + (data.error || 'Failed') + '</p>'; refresh(); return; }
       let html = '';
@@ -122,6 +126,10 @@
       }
       reply.innerHTML = html;
       refresh();
+    }
+    async function logout() {
+      await fetch('/api/logout', { method: 'POST', credentials: 'same-origin' });
+      location.href = '/login.html';
     }
     refresh();
   </script>
