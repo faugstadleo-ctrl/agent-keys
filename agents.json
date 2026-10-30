@@ -1,0 +1,15 @@
+[
+  {
+    "id": "54f9d6955fc7",
+    "name": "fdhbsa",
+    "owner": "sdfh",
+    "allowed": [
+      "read",
+      "write",
+      "delete"
+    ],
+    "key": "ak_79cb893a04ca4ffa2c46f39d25ce0bb3e037",
+    "killed": false,
+    "created": "2026-10-30T22:27:40.319Z"
+  }
+]
