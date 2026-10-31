@@ -54,5 +54,19 @@
     "action": "DELETE /user",
     "result": "sent",
     "detail": "Gate allowed it. GitHub rejected it (404)."
+  },
+  {
+    "at": "2026-10-31T22:21:44.615Z",
+    "agent": "asdfdsa",
+    "action": "killed",
+    "result": "refused",
+    "detail": "Key turned off"
+  },
+  {
+    "at": "2026-10-31T22:21:45.049Z",
+    "agent": "fdhbsa",
+    "action": "killed",
+    "result": "refused",
+    "detail": "Key turned off"
   }
 ]
