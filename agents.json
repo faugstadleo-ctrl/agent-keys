@@ -9,7 +9,7 @@
       "delete"
     ],
     "key": "ak_79cb893a04ca4ffa2c46f39d25ce0bb3e037",
-    "killed": false,
+    "killed": true,
     "created": "2026-10-30T22:27:40.319Z"
   },
   {
@@ -22,7 +22,7 @@
       "delete"
     ],
     "key": "ak_e32b75d6ab2902fbcb90bd9e78164f01d05f",
-    "killed": false,
+    "killed": true,
     "created": "2026-10-31T22:21:25.103Z"
   }
 ]
