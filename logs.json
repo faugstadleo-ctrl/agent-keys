@@ -33,5 +33,26 @@
     "action": "created",
     "result": "allowed",
     "detail": "Owner sadasd. Allowed: read, write, delete"
+  },
+  {
+    "at": "2026-10-31T22:21:41.680Z",
+    "agent": "asdfdsa",
+    "action": "GET /user",
+    "result": "allowed",
+    "detail": "Sent to GitHub. GitHub 200"
+  },
+  {
+    "at": "2026-10-31T22:21:41.950Z",
+    "agent": "asdfdsa",
+    "action": "GET /user/repos?per_page=5",
+    "result": "allowed",
+    "detail": "Sent to GitHub. GitHub 200"
+  },
+  {
+    "at": "2026-10-31T22:21:42.361Z",
+    "agent": "asdfdsa",
+    "action": "DELETE /user",
+    "result": "sent",
+    "detail": "Gate allowed it. GitHub rejected it (404)."
   }
 ]
