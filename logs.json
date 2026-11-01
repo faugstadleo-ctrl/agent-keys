@@ -68,5 +68,12 @@
     "action": "killed",
     "result": "refused",
     "detail": "Key turned off"
+  },
+  {
+    "at": "2026-11-01T02:39:43.723Z",
+    "agent": "asdfdsa",
+    "action": "created",
+    "result": "allowed",
+    "detail": "Owner sadasd. Allowed: read, write, delete"
   }
 ]
