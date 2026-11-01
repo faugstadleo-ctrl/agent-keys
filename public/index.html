@@ -38,7 +38,7 @@
   <header><nav><a class="brand" href="/">Agent keys</a><button class="out" onclick="logout()">Logout</button></nav></header>
   <main>
     <h1>Give an agent a key. Keep the record.</h1>
-    <p>Create an agent, tick what it may do, and give it the key. It calls the gate. You see every call here. Kill the key and it stops.</p>
+    <p>Create an agent, tick what it may do, and give it the key. Run it, or point your own agent at the gate. You see every call here. Kill the key and it stops.</p>
 
     <h2>New agent</h2>
     <div class="card">
@@ -56,9 +56,18 @@
       <p id="created"></p>
     </div>
 
-    <h2>Give this to the agent</h2>
+    <h2>Run the agent</h2>
     <div class="card">
-      <p>The agent does not get your GitHub token. It gets the key, and it calls this.</p>
+      <p>Paste the key and press Run. It will try to read you, read your repos, and delete you. The gate decides each one.</p>
+      <label for="key">Agent key</label>
+      <input id="key" type="text" placeholder="ak_...">
+      <button onclick="runAgent()">Run agent</button>
+      <div id="reply"></div>
+    </div>
+
+    <h2>Give this to your own agent</h2>
+    <div class="card">
+      <p>Or do not use the button. Give the key to a program, and it calls this.</p>
       <pre id="sample">Create an agent to get the call.</pre>
     </div>
 
@@ -109,11 +118,28 @@
       const data = await res.json();
       if (!res.ok) { created.innerHTML = '<span class="error">' + data.error + '</span>'; return; }
       created.innerHTML = 'Copy this key now. It will not be shown in full again.<br><code>' + data.agent.key + '</code>';
+      document.getElementById('key').value = data.agent.key;
       sample(data.agent.key);
       refresh();
     }
     async function killAgent(id) {
       await fetch('/api/agents/' + id + '/kill', { method: 'POST', credentials: 'same-origin' });
+      refresh();
+    }
+    async function runAgent() {
+      const key = document.getElementById('key').value.trim();
+      const reply = document.getElementById('reply');
+      reply.innerHTML = '<p>Running...</p>';
+      const res = await fetch('/api/run-agent', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key }) });
+      if (res.status === 401) { location.href = '/login.html'; return; }
+      const data = await res.json();
+      if (!res.ok) { reply.innerHTML = '<p class="error">' + (data.error || 'Failed') + '</p>'; refresh(); return; }
+      let html = '';
+      for (const step of data.results) {
+        html += '<p><span class="' + (step.result || 'refused') + '">' + (step.result || 'refused') + '</span> ' + step.method + ' ' + step.path + '<br>' + (step.detail || '') + '</p>';
+        if (step.body) html += '<pre>' + step.body.slice(0, 1500) + '</pre>';
+      }
+      reply.innerHTML = html;
       refresh();
     }
     async function logout() {
